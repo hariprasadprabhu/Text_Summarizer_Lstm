@@ -408,39 +408,10 @@ from keras.layers import TimeDistributed
 
 
 
-
-#############SIMPLE lstm ENCODER DECODER#################################
-
-
-# encoder
-encoder_inputs = Input(shape=(MAX_LEN, ), dtype='int32',)
-encoder_embedding = encoder_embedding_layer(encoder_inputs)
-encoder_LSTM = LSTM(HIDDEN_UNITS)(encoder_embedding)
-# decoder
-decoder_inputs = Input(shape=(MAX_LEN, ))
-decoder_embedding = decoder_embedding_layer(decoder_inputs)
-decoder_LSTM = LSTM(200)(decoder_embedding)
-# merge
-merge_layer = concatenate([encoder_LSTM, decoder_LSTM])
-decoder_outputs = Dense(units=VOCAB_SIZE+1, activation="softmax")(merge_layer) # SUM_VOCAB_SIZE, sum_embedding_matrix.shape[1]
-
-model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
-model.summary()
-
-
-############# END OF SIMPLE lstm ENCODER DECODER#################################
-model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
-
-
-
-
-
-############# Bidirectional LSTM Encoder-Decoder-seq2seQ #################################
-
-
 """
-Bidirectional LSTM: Others Inspired Encoder-Decoder-seq2seq
+encoder
 """
+
 
 encoder_inputs = Input(shape=(MAX_LEN,))
 encoder_embedding = encoder_embedding_layer(encoder_inputs)
@@ -563,110 +534,5 @@ with open('text_summary.json', "w") as json_file:
 model.save_weights("text_summary.h5")
 model.load_weights('text_summary.h5')
 print("Saved Model!")
-
-
-
-reverse_target_word_index=y_tokenizer.index_word
-reverse_source_word_index=x_tokenizer.index_word
-target_word_index=y_tokenizer.word_index
-
-
-
-MAX_INPUT_LENGTH = 1000
-VOCAB_SIZE =1500
-EMBEDDING_DIM = 200
-HIDDEN_UNITS_ENC = 200
-#VOCAB_SIZE=VOCAB_SIZE+1
-
-
-LEARNING_RATE = 0.002
-BATCH_SIZE = 32
-EPOCHS = 5
-
-
-
-encoder_inputs = Input(shape=(MAX_INPUT_LENGTH,), name='encoder_inputs')
-embedding_layer = Embedding(1500 + 1, EMBEDDING_DIM, weights=[art_embedding_matrix],
-                            input_length=MAX_INPUT_LENGTH, trainable=False, name='embedding_layer')
-
-encoder_rnn = LSTM(units=HIDDEN_UNITS_ENC, return_state=True, dropout=0.5, recurrent_dropout=0.5,name='encoder_lstm')
-encoder_output, state_h_f, state_c_f = encoder_rnn(embedding_layer(encoder_inputs))
-encoder_rnn2 = LSTM(units=HIDDEN_UNITS_ENC, return_state=True, dropout=0.5, recurrent_dropout=0.5,
-go_backwards=True,name='encoder_lstm_backward')
-encoder_output, state_h_b, state_c_b = encoder_rnn2(embedding_layer(encoder_inputs))
-
-state_h = concatenate([state_h_f, state_h_b])
-state_c = concatenate([state_c_f, state_c_b])
-
-encoder_states = [state_h, state_c]
-
-decoder_inputs = Input(shape=(MAX_INPUT_LENGTH,), name='decoder_inputs')
-embedding_layer = Embedding(1500 + 1, EMBEDDING_DIM, weights=[sum_embedding_matrix],
-input_length=MAX_INPUT_LENGTH, trainable=False, name='emb_2')
-decoder_lstm = LSTM(HIDDEN_UNITS_ENC * 2, return_sequences=False, return_state=True, dropout=0.5,
-recurrent_dropout=0.5, name='decoder_lstm')
-decoder_outputs, state_h, state_c = decoder_lstm(embedding_layer(decoder_inputs), initial_state=encoder_states)
-
-decoder_dense = Dense(200, name='decoder_dense')
-decoder_outputs = decoder_dense(decoder_outputs)
-model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
-
-
-
-
-def decode_sequence(input_seq):
-    # Encode the input as state vectors.
-    e_out, e_h, e_c = model.predict(input_seq)
-    
-    # Generate empty target sequence of length 1.
-    target_seq = np.zeros((1,1))
-    
-    # Populate the first word of target sequence with the start word.
-    target_seq[0, 0] = target_word_index['sostok']
-
-    stop_condition = False
-    decoded_sentence = ''
-    while not stop_condition:
-      
-        output_tokens, h, c = decoder_model.predict([target_seq] + [e_out, e_h, e_c])
-
-        # Sample a token
-        sampled_token_index = np.argmax(output_tokens[0, -1, :])
-        sampled_token = reverse_target_word_index[sampled_token_index]
-        
-        if(sampled_token!='eostok'):
-            decoded_sentence += ' '+sampled_token
-
-        # Exit condition: either hit max length or find stop word.
-        if (sampled_token == 'eostok'  or len(decoded_sentence.split()) >= (max_summary_len-1)):
-            stop_condition = True
-
-        # Update the target sequence (of length 1).
-        target_seq = np.zeros((1,1))
-        target_seq[0, 0] = sampled_token_index
-
-        # Update internal states
-        e_h, e_c = h, c
-
-    return decoded_sentence
-
-
-def seq2summary(input_seq):
-    newString=''
-    for i in input_seq:
-        newString=newString+reverse_target_word_index[i]+' '
-    return newString
-
-def seq2text(input_seq):
-    newString=''
-    for i in input_seq:
-        if(i!=0):
-            newString=newString+reverse_source_word_index[i]+' '
-    return newString
-
-
-print("Original summary:",seq2summary(y_tr[i]))
-print("Predicted summary:",decode_sequence(x_tr[i].reshape(1,max_text_len)))
-print("\n")
 
 
